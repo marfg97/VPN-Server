@@ -1,6 +1,5 @@
 # OpenVPN Server on AWS EC2 - Automated Deployment
 
-![OpenVPN Logo](https://openvpn.net/wp-content/uploads/2013/04/openvpn_logo-300x95.png)
 
 ## 📝 Description
 
