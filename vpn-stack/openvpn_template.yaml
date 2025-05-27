@@ -1,0 +1,105 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Auto deploy of a VPN server (OpenVPN on Ubuntu 22.04)
+
+Parameters:
+  KeyPairName:
+    Description: Name of an existing EC2 key pair
+    Type: AWS::EC2::KeyPair::KeyName
+
+  S3BucketName:
+    Description: Name of the S3 bucket containing the setup script
+    Type: String
+
+  ScriptKey:
+    Description: Path to the script within the bucket
+    Type: String
+    Default: vpn/scripts/vpn_config.sh
+
+Resources:
+
+  VPNSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for VPN server
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: udp
+          FromPort: 1194
+          ToPort: 1194
+          CidrIp: 0.0.0.0/0
+
+  VPNInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ec2.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub arn:aws:s3:::${S3BucketName}/${ScriptKey}
+
+  VPNInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref VPNInstanceRole
+
+  VPNInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0f9de6e2d2f067fca # Ubuntu 22.04 LTS - us-east-1
+      InstanceType: t3.micro
+      KeyName: !Ref KeyPairName
+      IamInstanceProfile: !Ref VPNInstanceProfile
+      SecurityGroupIds:
+        - !GetAtt VPNSecurityGroup.GroupId
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          apt-get update -y
+          apt-get install -y awscli unzip
+          aws s3 cp s3://${S3BucketName}/${ScriptKey} /tmp/vpn-config.sh
+          chmod +x /tmp/vpn-config.sh
+          /tmp/vpn-config.sh
+      Tags:
+        - Key: Name
+          Value: VPN-Server
+
+  ElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+    DependsOn: VPNInstance
+
+  ElasticIPAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      InstanceId: !Ref VPNInstance
+      EIP: !Ref ElasticIP
+
+Outputs:
+  ServerPublicIP:
+    Description: Public IP of the VPN server
+    Value: !Ref ElasticIP
+
+  DownloadCommand:
+    Description: Command to download client configuration files
+    Value: !Sub |
+      scp -i ${KeyPairName}.pem ubuntu@${ElasticIP}:/home/ubuntu/vpn-clients/client*.ovpn .
+
+  OpenVPNConfigScript:
+    Description: Configuration script downloaded from S3
+    Value: !Sub s3://${S3BucketName}/${ScriptKey}
