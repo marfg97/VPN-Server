@@ -1,6 +1,6 @@
 # AWS OpenVPN Server Auto-Deployment
 
-Automated deployment of a secure OpenVPN server on AWS EC2 using CloudFormation and custom configuration scripts.
+Automated deployment of a secure OpenVPN server on AWS EC2 using CloudFormation and a setup script stored in S3.
 
 ## Features
 
@@ -14,18 +14,36 @@ Automated deployment of a secure OpenVPN server on AWS EC2 using CloudFormation 
   - IAM role with least privilege access
   - TLS-Auth protection against DDoS attacks
 
+
+## 📐 Architecture
+
+![VPN Architecture Diagram](vpn_diagram.png)
+
+## 📁 Project Structure
+
+```bash 
+.
+├── README.md # This file
+├── deploy.sh # Shell script to deploy the stack
+├── vpn-stack/
+│ ├── openvpn_template.yaml # CloudFormation template
+│ └── scripts/
+│ └── vpn_config.sh # OpenVPN setup script
+└── vpn_diagram.png # Network architecture diagram
+```
+
 ## Prerequisites
 
 - AWS Account with [CLI Access](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html)
 - EC2 Key Pair ([Create one](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html))
-- S3 Bucket for configuration scripts
-- Basic understanding of AWS services
+- An **S3 bucket** containing the `vpn_config.sh` script in the correct path
+- The CloudFormation template (`vpn-stack/openvpn_template.yaml`)
 
 ## Deployment
 
 ### 1. Upload Configuration Script to S3
 ```bash
-aws s3 cp vpn-config-auto.sh s3://your-bucket-name/scripts/vpn-config-auto.sh 
+aws s3 cp vpn-stack/scripts/vpn_config.sh s3://your-bucket-name/vpn/scripts/vpn_config.sh
 ```
 
 
@@ -57,4 +75,11 @@ scp -i your-key.pem ubuntu@SERVER_IP:/home/ubuntu/vpn-clients/client*.ovpn .
 ## 🔗 Connect to VPN
 ```bash 
 sudo openvpn --config client1.ovpn  
+```
+
+## ✅ Clean Up
+
+```bash 
+aws cloudformation delete-stack --stack-name vpn-stack
+
 ```
